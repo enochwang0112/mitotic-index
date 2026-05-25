@@ -238,3 +238,6 @@ data/boxes/validate/mitotic/*
 
 # DS_Store
 .DS_Store
+
+# Ignore all files that start with "test_"
+test_*

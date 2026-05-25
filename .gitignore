@@ -216,3 +216,25 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Datasets
+data/raw/*
+!data/raw/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
+
+data/boxes/train/interphase/*
+!data/boxes/train/interphase/.gitkeep
+
+data/boxes/train/mitotic/*
+!data/boxes/train/mitotic/.gitkeep
+
+data/boxes/validate/interphase/*
+!data/boxes/validate/interphase/.gitkeep
+
+data/boxes/validate/mitotic/*
+!data/boxes/validate/mitotic/.gitkeep
+
+# DS_Store
+.DS_Store

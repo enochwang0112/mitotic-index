@@ -4,7 +4,7 @@ import numpy as np
 from .convert_uint8 import to_uint8_gray
 from .grayscale_norm import normalize_grayscale
 
-def is_grayscale(image: np.ndarray, tolerance=5.0) -> bool:
+def is_grayscale(image: np.ndarray, tolerance: float = 5.0) -> bool:
     """Return whether the image is grayscale."""
     if image is None:
         raise ValueError("Input image is None")

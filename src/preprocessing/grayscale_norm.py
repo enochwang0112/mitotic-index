@@ -6,10 +6,11 @@ from .convert_uint8 import to_uint8_gray
 def normalize_grayscale(
     image: np.ndarray,
     *,
+    apply_percentile_stretch: bool = True,
     output: str = "uint8",  # "uint8" or "zscore"
 ) -> np.ndarray:
     """
-    Gaussian background subtraction + auto percentile stretch + CLAHE for grayscale images.
+    Gaussian background subtraction + optional percentile stretch + CLAHE for grayscale images.
     """
     if image is None:
         raise ValueError("image is None")
@@ -31,27 +32,28 @@ def normalize_grayscale(
 
     corrected = cv2.normalize(corrected, None, 0, 255, cv2.NORM_MINMAX)
 
-    low_pct, high_pct = 1.0, 99.0
-    low_val, high_val = np.percentile(corrected, (low_pct, high_pct))
-    pct_span = float(high_val - low_val)
-    span_threshold = 0.5 * 255.0
-    if pct_span < span_threshold and high_val > low_val:
-        stretched = (corrected.astype(np.float32) - float(low_val)) * (255.0 / float(high_val - low_val))
-        corrected = np.clip(stretched, 0, 255).astype(np.uint8)
+    if apply_percentile_stretch:
+        low_pct, high_pct = 1.0, 99.5
+        low_val, high_val = np.percentile(corrected, (low_pct, high_pct))
+        pct_span = float(high_val - low_val)
+        span_threshold = 0.5 * 255.0
+        if pct_span < span_threshold and high_val > low_val:
+            stretched = (corrected.astype(np.float32) - float(low_val)) * (255.0 / float(high_val - low_val))
+            corrected = np.clip(stretched, 0, 255).astype(np.uint8)
 
     corrected = cv2.medianBlur(corrected, 3)
 
-    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(24, 24))
+    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(16, 16))
     processed = clahe.apply(corrected)
 
-    blended = cv2.addWeighted(processed, 0.6, corrected, 0.4, 0.0)
+    blended = cv2.addWeighted(processed, 0.8, corrected, 0.2, 0.0)
 
     if white_background:
         blended = 255 - blended
 
     if output == "uint8":
         return blended
-    
+
     img_float = blended.astype(np.float32) / 255.0
     if output == "zscore":
         mean_val = img_float.mean()
@@ -60,4 +62,4 @@ def normalize_grayscale(
             std_val = 1.0
         return (img_float - mean_val) / std_val
 
-    raise ValueError("unknown output format: " + str(output))
+    raise ValueError(f"unknown output format: {output}")

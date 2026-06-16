@@ -1,38 +1,54 @@
-import cv2
-import numpy as np 
+import numpy as np
 
 from .convert_uint8 import to_uint8_gray
-from .grayscale_norm import normalize_grayscale
+from .grayscale_norm import normalize_fluorescence
+from .color_norm import normalize_brightfield
 
-def is_grayscale(image: np.ndarray, tolerance: float = 5.0) -> bool:
-    """Return whether the image is grayscale."""
+FLUORESCENCE_BG_MAX = 80.0
+
+
+def detect_modality(image: np.ndarray) -> str:
     if image is None:
         raise ValueError("Input image is None")
 
-    if image.ndim == 2:
-        return True
+    gray = to_uint8_gray(image)
+    background = float(np.median(gray))
 
-    if image.ndim == 3 and image.shape[2] == 1:
-        return True
+    if background < FLUORESCENCE_BG_MAX:
+        return "fluorescence"
+    return "brightfield"
 
-    if image.ndim == 3 and image.shape[2] >= 3:
-        bgr = image[:, :, :3]
-        min_channel = np.min(bgr, axis=2)
-        max_channel = np.max(bgr, axis=2)
 
-        av_spread = np.mean(max_channel.astype(np.float32) - min_channel.astype(np.float32))
+def to_model_tensor(arr: np.ndarray, *, output: str = "float01") -> np.ndarray:
+    arr = arr.astype(np.float32)
+    if arr.ndim == 3 and arr.shape[2] == 1:
+        arr = arr[:, :, 0]
 
-        return float(av_spread) < tolerance
+    if output == "float01":
+        return np.clip(arr, 0.0, 1.0).astype(np.float32)
 
-    return False
+    if output == "uint8":
+        return (np.clip(arr, 0.0, 1.0) * 255).astype(np.uint8)
 
-def normalize_image(image: np.ndarray) -> np.ndarray:
-    """Normalize the image based on the image type."""
+    if output == "zscore":
+        mean_val = float(arr.mean())
+        std_val = float(arr.std())
+        if std_val < 1e-6:
+            std_val = 1.0
+        return ((arr - mean_val) / std_val).astype(np.float32)
+
+    raise ValueError(f"unknown output format: {output}")
+
+
+def normalize_image(image: np.ndarray, *, output: str = "float01") -> np.ndarray:
     if image is None:
         raise ValueError("Input image is None")
 
-    if is_grayscale(image):
-        gray = to_uint8_gray(image)
-        return normalize_grayscale(gray)
+    modality = detect_modality(image)
 
-        
+    if modality == "fluorescence":
+        nuclei = normalize_fluorescence(image)
+    else:
+        nuclei = normalize_brightfield(image, return_hematoxylin=True)
+
+    return to_model_tensor(nuclei, output=output)

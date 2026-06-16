@@ -241,3 +241,7 @@ data/boxes/validate/mitotic/*
 
 # Ignore all files that start with "test_"
 test_*
+
+# Local
+.claude/
+temp.md

@@ -1,13 +1,19 @@
 from .convert_uint8 import to_uint8_gray, to_uint8_bgr
-from .normalize import is_grayscale, normalize_image
-from .grayscale_norm import normalize_grayscale
-from .color_norm import normalize_non_grayscale
+from .normalize import (
+    detect_modality,
+    normalize_image,
+    to_model_tensor,
+)
+from .grayscale_norm import normalize_fluorescence
+from .color_norm import normalize_non_grayscale, normalize_brightfield
 
 __all__ = [
-    "is_grayscale",
+    "detect_modality",
     "normalize_image",
+    "to_model_tensor",
     "to_uint8_gray",
     "to_uint8_bgr",
-    "normalize_grayscale",
+    "normalize_fluorescence",
     "normalize_non_grayscale",
+    "normalize_brightfield",
 ]

@@ -6,6 +6,8 @@ _IO = 240.0
 _ALPHA = 1.0
 _BETA = 0.15
 
+_BG_SIGMA = 16.0
+
 _HE_REF = np.array(
     [[0.5626, 0.2159],
      [0.7201, 0.8012],
@@ -13,13 +15,6 @@ _HE_REF = np.array(
     dtype=np.float64,
 )
 _MAXC_REF = np.array([1.9705, 1.0308], dtype=np.float64)
-
-_HE_FIXED = np.array(
-    [[0.650, 0.704, 0.286],
-     [0.072, 0.990, 0.105]],
-    dtype=np.float64,
-)
-_HEMA_REF_MAX = 1.5
 
 
 def _rescale01(arr: np.ndarray) -> np.ndarray:
@@ -62,33 +57,29 @@ def _macenko_stains(rgb: np.ndarray, Io: float = _IO, alpha: float = _ALPHA, bet
     return HE, C, (h, w)
 
 
-def _hematoxylin_map(rgb: np.ndarray, Io: float = _IO) -> np.ndarray:
-    h, w = rgb.shape[:2]
-    flat = rgb.reshape(-1, 3).astype(np.float64)
-    OD = -np.log((flat + 1.0) / Io)
+def _nuclei_map(image: np.ndarray) -> np.ndarray:
+    gray = to_uint8_gray(image).astype(np.float32)
+    inverted = 255.0 - gray
+    background = cv2.GaussianBlur(inverted, (0, 0), sigmaX=_BG_SIGMA)
+    high_pass = np.clip(inverted - background, 0.0, None)
 
-    stains = _HE_FIXED / np.linalg.norm(_HE_FIXED, axis=1, keepdims=True)
-    third = np.cross(stains[0], stains[1])
-    n = np.linalg.norm(third)
-    third = third / n if n > 1e-6 else np.array([0.0, 0.0, 1.0])
-    M = np.vstack([stains, third])
-
-    conc = OD.dot(np.linalg.inv(M))
-    hema = conc[:, 0].reshape(h, w)
-
-    hema = np.clip(hema, 0.0, _HEMA_REF_MAX) / _HEMA_REF_MAX
-    return hema.astype(np.float32)
+    lo = float(np.percentile(high_pass, 1.0))
+    hi = float(np.percentile(high_pass, 99.5))
+    if hi <= lo:
+        hi = lo + 1.0
+    stretched = (high_pass - lo) / (hi - lo)
+    return np.clip(stretched, 0.0, 1.0).astype(np.float32)
 
 
-def normalize_brightfield(image: np.ndarray, *, return_hematoxylin: bool = True) -> np.ndarray:
+def normalize_brightfield(image: np.ndarray, *, return_nuclei_map: bool = True) -> np.ndarray:
     if image is None:
         raise ValueError("image is None")
 
+    if return_nuclei_map:
+        return _nuclei_map(image)
+
     bgr = to_uint8_bgr(image)
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-
-    if return_hematoxylin:
-        return _hematoxylin_map(rgb)
 
     try:
         _, C, (h, w) = _macenko_stains(rgb)
@@ -109,6 +100,6 @@ def normalize_brightfield(image: np.ndarray, *, return_hematoxylin: bool = True)
 
 
 def normalize_non_grayscale(image: np.ndarray) -> np.ndarray:
-    rgb01 = normalize_brightfield(image, return_hematoxylin=False)
+    rgb01 = normalize_brightfield(image, return_nuclei_map=False)
     rgb_u8 = (np.clip(rgb01, 0.0, 1.0) * 255).astype(np.uint8)
     return cv2.cvtColor(rgb_u8, cv2.COLOR_RGB2BGR)

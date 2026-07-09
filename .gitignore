@@ -236,6 +236,10 @@ data/boxes/validate/interphase/*
 data/boxes/validate/mitotic/*
 !data/boxes/validate/mitotic/.gitkeep
 
+# Model checkpoints
+models/
+*.pt
+
 # DS_Store
 .DS_Store
 

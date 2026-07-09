@@ -40,15 +40,16 @@ def to_model_tensor(arr: np.ndarray, *, output: str = "float01") -> np.ndarray:
     raise ValueError(f"unknown output format: {output}")
 
 
-def normalize_image(image: np.ndarray, *, output: str = "float01") -> np.ndarray:
+def normalize_image(image: np.ndarray, *, output: str = "float01", modality: str | None = None) -> np.ndarray:
     if image is None:
         raise ValueError("Input image is None")
 
-    modality = detect_modality(image)
+    if modality is None:
+        modality = detect_modality(image)
 
     if modality == "fluorescence":
         nuclei = normalize_fluorescence(image)
     else:
-        nuclei = normalize_brightfield(image, return_hematoxylin=True)
+        nuclei = normalize_brightfield(image, return_nuclei_map=True)
 
     return to_model_tensor(nuclei, output=output)

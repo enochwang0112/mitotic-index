@@ -39,18 +39,44 @@ def build_instance_map(masks: list[np.ndarray]) -> np.ndarray:
     return inst
 
 
-def build_3class_target_from_labels(labels: np.ndarray, border_width: int = 2) -> np.ndarray:
-    foreground = labels > 0
-    target = np.full(labels.shape, BACKGROUND, dtype=np.uint8)
-    if not foreground.any():
-        return target
+_CONTACT_FILL = np.float32(1e7)
 
+TARGET_MODES = ("ring", "contact")
+
+
+def _ring_interior(labels: np.ndarray, foreground: np.ndarray, border_width: int) -> np.ndarray:
     k = 2 * border_width + 1
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     lab = labels.astype(np.float32)
     neigh_max = cv2.dilate(lab, kernel)
     neigh_min = cv2.erode(lab, kernel)
-    interior = foreground & (neigh_max == lab) & (neigh_min == lab)
+    return foreground & (neigh_max == lab) & (neigh_min == lab)
+
+
+def _contact_interior(labels: np.ndarray, foreground: np.ndarray, border_width: int) -> np.ndarray:
+    k = 2 * border_width + 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (k, k))
+    lab = labels.astype(np.float32)
+    filled = np.where(foreground, lab, _CONTACT_FILL).astype(np.float32)
+    neigh_max = cv2.dilate(lab, kernel)
+    neigh_min = cv2.erode(filled, kernel)
+    contact = (neigh_max > 0) & (neigh_min < _CONTACT_FILL) & (neigh_max != neigh_min)
+    return foreground & ~contact
+
+
+def build_3class_target_from_labels(
+    labels: np.ndarray, border_width: int = 2, mode: str = "ring"
+) -> np.ndarray:
+    if mode not in TARGET_MODES:
+        raise ValueError(f"unknown target mode {mode!r}; choose from {TARGET_MODES}")
+
+    foreground = labels > 0
+    target = np.full(labels.shape, BACKGROUND, dtype=np.uint8)
+    if not foreground.any():
+        return target
+
+    build = _ring_interior if mode == "ring" else _contact_interior
+    interior = build(labels, foreground, border_width)
 
     ids = np.unique(labels[foreground])
     kept = np.unique(labels[interior]) if interior.any() else np.empty(0, dtype=labels.dtype)
@@ -63,14 +89,14 @@ def build_3class_target_from_labels(labels: np.ndarray, border_width: int = 2) -
     return target
 
 
-def build_3class_target(masks: list[np.ndarray], border_width: int = 2) -> np.ndarray:
+def build_3class_target(masks: list[np.ndarray], border_width: int = 2, mode: str = "ring") -> np.ndarray:
     if not masks:
         raise ValueError("no masks provided")
-    return build_3class_target_from_labels(build_instance_map(masks), border_width=border_width)
+    return build_3class_target_from_labels(build_instance_map(masks), border_width=border_width, mode=mode)
 
 
-def masks_to_targets(masks_dir, border_width: int = 2):
+def masks_to_targets(masks_dir, border_width: int = 2, mode: str = "ring"):
     masks = load_instance_masks(masks_dir)
-    target = build_3class_target(masks, border_width=border_width)
+    target = build_3class_target(masks, border_width=border_width, mode=mode)
     inst = build_instance_map(masks)
     return target, inst

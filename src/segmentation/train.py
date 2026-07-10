@@ -85,6 +85,10 @@ def main(argv=None) -> int:
                    help="unet = from scratch; resnet34 = ImageNet-pretrained encoder")
     p.add_argument("--scale-min", type=float, default=1.0, help="Min random scale (1.0 = no scale aug)")
     p.add_argument("--scale-max", type=float, default=1.0, help="Max random scale (e.g. 2.0)")
+    p.add_argument("--target-mode", choices=["ring", "contact"], default="ring",
+                   help="ring = border around every nucleus; contact = border only where nuclei touch")
+    p.add_argument("--border-weight", type=float, default=2.0,
+                   help="Cross-entropy weight for the border class (raise it for --target-mode contact)")
     args = p.parse_args(argv)
 
     samples = []
@@ -105,8 +109,10 @@ def main(argv=None) -> int:
         scale_range = (args.scale_min, args.scale_max)
         print(f"scale augmentation: {scale_range[0]}x - {scale_range[1]}x (log-uniform)")
 
-    train_ds = NucleiSegmentationDataset(train_s, tile_size=args.tile, augment=True, scale_range=scale_range)
-    val_ds = NucleiSegmentationDataset(val_s, tile_size=args.tile, augment=False)
+    train_ds = NucleiSegmentationDataset(train_s, tile_size=args.tile, augment=True,
+                                         scale_range=scale_range, target_mode=args.target_mode)
+    val_ds = NucleiSegmentationDataset(val_s, tile_size=args.tile, augment=False,
+                                       target_mode=args.target_mode)
     if args.balance_modality:
         sampler, counts = modality_sampler(train_s, power=args.balance_power)
         eff = {m: counts[m] ** (1 - args.balance_power) for m in counts}
@@ -122,11 +128,12 @@ def main(argv=None) -> int:
 
     device = pick_device()
     model = build_model(args.encoder).to(device)
-    loss_fn = SegLoss().to(device)
+    loss_fn = SegLoss(class_weights=(1.0, 1.0, args.border_weight)).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     params = sum(p.numel() for p in model.parameters())
     print(f"device: {device}  encoder: {args.encoder}  params: {params / 1e6:.1f}M  lr: {args.lr}")
+    print(f"target mode: {args.target_mode}  border class weight: {args.border_weight}")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     best = float("inf")
@@ -137,7 +144,8 @@ def main(argv=None) -> int:
         flag = ""
         if val_loss < best:
             best = val_loss
-            torch.save({"model": model.state_dict(), "arch": args.encoder}, args.out)
+            torch.save({"model": model.state_dict(), "arch": args.encoder,
+                        "target_mode": args.target_mode}, args.out)
             flag = "  <- saved"
         print(f"\r{' ' * 80}\repoch {epoch:3d}  train {train_loss:.4f}  val {val_loss:.4f}{flag}")
 

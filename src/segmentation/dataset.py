@@ -99,6 +99,7 @@ class NucleiSegmentationDataset(Dataset):
         output: str = "zscore",
         seed: int = 0,
         scale_range: tuple[float, float] | None = None,
+        target_mode: str = "ring",
     ):
         self.samples = samples
         self.tile_size = tile_size
@@ -106,6 +107,7 @@ class NucleiSegmentationDataset(Dataset):
         self.border_width = border_width
         self.output = output
         self.scale_range = scale_range
+        self.target_mode = target_mode
         self._rng = np.random.default_rng(seed)
 
     def __len__(self) -> int:
@@ -126,7 +128,9 @@ class NucleiSegmentationDataset(Dataset):
         else:
             image, labels = _random_crop_pad(image, labels.astype(np.float32), self.tile_size, self._rng)
             labels = labels.astype(np.int32)
-        target = build_3class_target_from_labels(labels, border_width=self.border_width)
+        target = build_3class_target_from_labels(
+            labels, border_width=self.border_width, mode=self.target_mode
+        )
 
         if self.augment:
             image, target = _augment(image, target, self._rng)

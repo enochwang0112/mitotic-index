@@ -89,6 +89,10 @@ def main(argv=None) -> int:
                    help="ring = border around every nucleus; contact = border only where nuclei touch")
     p.add_argument("--border-weight", type=float, default=2.0,
                    help="Cross-entropy weight for the border class (raise it for --target-mode contact)")
+    p.add_argument("--adaptive-border", action=argparse.BooleanOptionalAction, default=False,
+                   help="Thin the border for small cells so they keep interior signal (helps small-cell recall)")
+    p.add_argument("--canonical-diam", type=float, default=0.0,
+                   help="Resample each image so its median nucleus diameter hits this px target (0 = off)")
     args = p.parse_args(argv)
 
     samples = []
@@ -110,9 +114,12 @@ def main(argv=None) -> int:
         print(f"scale augmentation: {scale_range[0]}x - {scale_range[1]}x (log-uniform)")
 
     train_ds = NucleiSegmentationDataset(train_s, tile_size=args.tile, augment=True,
-                                         scale_range=scale_range, target_mode=args.target_mode)
+                                         scale_range=scale_range, target_mode=args.target_mode,
+                                         adaptive_border=args.adaptive_border,
+                                         canonical_diam=args.canonical_diam)
     val_ds = NucleiSegmentationDataset(val_s, tile_size=args.tile, augment=False,
-                                       target_mode=args.target_mode)
+                                       target_mode=args.target_mode, adaptive_border=args.adaptive_border,
+                                       canonical_diam=args.canonical_diam)
     if args.balance_modality:
         sampler, counts = modality_sampler(train_s, power=args.balance_power)
         eff = {m: counts[m] ** (1 - args.balance_power) for m in counts}
@@ -133,7 +140,9 @@ def main(argv=None) -> int:
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     params = sum(p.numel() for p in model.parameters())
     print(f"device: {device}  encoder: {args.encoder}  params: {params / 1e6:.1f}M  lr: {args.lr}")
-    print(f"target mode: {args.target_mode}  border class weight: {args.border_weight}")
+    print(f"target mode: {args.target_mode}  border class weight: {args.border_weight}  adaptive border: {args.adaptive_border}")
+    if args.canonical_diam:
+        print(f"canonical resampling: median nucleus -> {args.canonical_diam:.0f}px diameter")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     best = float("inf")
@@ -145,7 +154,9 @@ def main(argv=None) -> int:
         if val_loss < best:
             best = val_loss
             torch.save({"model": model.state_dict(), "arch": args.encoder,
-                        "target_mode": args.target_mode}, args.out)
+                        "target_mode": args.target_mode,
+                        "adaptive_border": args.adaptive_border,
+                        "canonical_diam": args.canonical_diam}, args.out)
             flag = "  <- saved"
         print(f"\r{' ' * 80}\repoch {epoch:3d}  train {train_loss:.4f}  val {val_loss:.4f}{flag}")
 

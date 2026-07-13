@@ -54,6 +54,8 @@ def _ring_interior(labels: np.ndarray, foreground: np.ndarray, border_width: int
 
 
 def _contact_interior(labels: np.ndarray, foreground: np.ndarray, border_width: int) -> np.ndarray:
+    if border_width <= 0:
+        return foreground.copy()
     k = 2 * border_width + 1
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (k, k))
     lab = labels.astype(np.float32)
@@ -64,8 +66,22 @@ def _contact_interior(labels: np.ndarray, foreground: np.ndarray, border_width: 
     return foreground & ~contact
 
 
+def _adaptive_interior(labels, foreground, build, border_width, small_area, small_width):
+    areas = np.bincount(labels.ravel())
+    small_ids = np.nonzero((areas > 0) & (areas < small_area))[0]
+    small_ids = small_ids[small_ids != 0]
+    small_mask = np.isin(labels, small_ids) & foreground
+    interior = np.zeros(labels.shape, dtype=bool)
+    for w, sel in ((small_width, small_mask), (border_width, foreground & ~small_mask)):
+        if not sel.any():
+            continue
+        interior |= build(labels, foreground, w) & sel
+    return interior
+
+
 def build_3class_target_from_labels(
-    labels: np.ndarray, border_width: int = 2, mode: str = "ring"
+    labels: np.ndarray, border_width: int = 2, mode: str = "ring",
+    *, adaptive_border: bool = False, small_area: int = 64, small_border_width: int = 1,
 ) -> np.ndarray:
     if mode not in TARGET_MODES:
         raise ValueError(f"unknown target mode {mode!r}; choose from {TARGET_MODES}")
@@ -76,7 +92,10 @@ def build_3class_target_from_labels(
         return target
 
     build = _ring_interior if mode == "ring" else _contact_interior
-    interior = build(labels, foreground, border_width)
+    if adaptive_border:
+        interior = _adaptive_interior(labels, foreground, build, border_width, small_area, small_border_width)
+    else:
+        interior = build(labels, foreground, border_width)
 
     ids = np.unique(labels[foreground])
     kept = np.unique(labels[interior]) if interior.any() else np.empty(0, dtype=labels.dtype)

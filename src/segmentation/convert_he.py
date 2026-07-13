@@ -130,9 +130,46 @@ def convert_pannuke(src: Path, out: Path, limit: int = 0) -> int:
     return written
 
 
+def convert_lizard(src: Path, out: Path, limit: int = 0) -> int:
+    pairs = []
+    for img_file in sorted(src.rglob("*_img.npy")):
+        lab_file = img_file.with_name(img_file.name.replace("_img.npy", "_lab.npy"))
+        if lab_file.exists():
+            pairs.append((img_file, lab_file))
+    if not pairs:
+        raise SystemExit(f"no *_img.npy / *_lab.npy pairs found under {src}")
+
+    arrays = {}
+    index = []
+    for img_file, lab_file in pairs:
+        split = img_file.stem.replace("_img", "")
+        arrays[split] = (np.load(img_file, mmap_mode="r"), np.load(lab_file, mmap_mode="r"))
+        n = int(arrays[split][0].shape[0])
+        print(f"  {split}: {n} patches")
+        index += [(split, i) for i in range(n)]
+
+    if limit and limit < len(index):
+        rng = np.random.default_rng(0)
+        index = [index[j] for j in rng.permutation(len(index))[:limit]]
+
+    written = 0
+    for split, i in index:
+        images, labels = arrays[split]
+        inst = np.asarray(labels[i])
+        if inst.ndim == 3:
+            inst = inst[:, :, 0]
+        inst = inst.astype(np.int32)
+        if int(inst.max()) == 0:
+            continue
+        bgr = cv2.cvtColor(np.asarray(images[i]).astype(np.uint8), cv2.COLOR_RGB2BGR)
+        _write_sample(out, f"lizard_{split}_{i:05d}", bgr, inst)
+        written += 1
+    return written
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--source", choices=["monuseg", "pannuke"], required=True)
+    p.add_argument("--source", choices=["monuseg", "pannuke", "lizard"], required=True)
     p.add_argument("--src", type=Path, required=True, help="Downloaded dataset directory")
     p.add_argument("--out", type=Path, default=None, help="Output root (default data/raw/<source>)")
     p.add_argument("--limit", type=int, default=0, help="Cap samples (0 = all); for a quick trial")
@@ -140,7 +177,7 @@ def main(argv=None) -> int:
 
     out = args.out or Path("data/raw") / args.source
     out.mkdir(parents=True, exist_ok=True)
-    convert = convert_monuseg if args.source == "monuseg" else convert_pannuke
+    convert = {"monuseg": convert_monuseg, "pannuke": convert_pannuke, "lizard": convert_lizard}[args.source]
     n = convert(args.src, out, limit=args.limit)
     print(f"wrote {n} samples to {out}")
     return 0 if n else 1

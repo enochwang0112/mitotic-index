@@ -68,6 +68,18 @@ def _random_scaled_crop(image: np.ndarray, labels: np.ndarray, tile: int, rng, s
     return image, labels.astype(np.int32)
 
 
+def _canonical_scale(labels: np.ndarray, target_diam: float,
+                     lo: float = 0.4, hi: float = 2.5) -> float:
+    areas = np.bincount(labels.ravel())[1:]
+    areas = areas[areas > 0]
+    if areas.size == 0:
+        return 1.0
+    median_diam = float(np.median(2.0 * np.sqrt(areas / np.pi)))
+    if median_diam <= 0:
+        return 1.0
+    return float(np.clip(target_diam / median_diam, lo, hi))
+
+
 def _augment(image: np.ndarray, target: np.ndarray, rng):
     if rng.random() < 0.5:
         image, target = image[:, ::-1], target[:, ::-1]
@@ -100,6 +112,8 @@ class NucleiSegmentationDataset(Dataset):
         seed: int = 0,
         scale_range: tuple[float, float] | None = None,
         target_mode: str = "ring",
+        adaptive_border: bool = False,
+        canonical_diam: float = 0.0,
     ):
         self.samples = samples
         self.tile_size = tile_size
@@ -108,6 +122,8 @@ class NucleiSegmentationDataset(Dataset):
         self.output = output
         self.scale_range = scale_range
         self.target_mode = target_mode
+        self.adaptive_border = adaptive_border
+        self.canonical_diam = canonical_diam
         self._rng = np.random.default_rng(seed)
 
     def __len__(self) -> int:
@@ -123,13 +139,18 @@ class NucleiSegmentationDataset(Dataset):
         image = normalize_image(raw, output=self.output, modality=s.get("modality")).astype(np.float32)
         labels = build_instance_map(load_instance_masks(s["masks"]))
 
+        canon = _canonical_scale(labels, self.canonical_diam) if self.canonical_diam else 1.0
         if self.augment and self.scale_range:
-            image, labels = _random_scaled_crop(image, labels, self.tile_size, self._rng, self.scale_range)
+            lo, hi = self.scale_range
+            image, labels = _random_scaled_crop(image, labels, self.tile_size, self._rng, (lo * canon, hi * canon))
+        elif canon != 1.0:
+            image, labels = _random_scaled_crop(image, labels, self.tile_size, self._rng, (canon, canon))
         else:
             image, labels = _random_crop_pad(image, labels.astype(np.float32), self.tile_size, self._rng)
             labels = labels.astype(np.int32)
         target = build_3class_target_from_labels(
-            labels, border_width=self.border_width, mode=self.target_mode
+            labels, border_width=self.border_width, mode=self.target_mode,
+            adaptive_border=self.adaptive_border,
         )
 
         if self.augment:

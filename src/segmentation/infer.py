@@ -11,6 +11,8 @@ _DECODE_PARAMS = {
     "brightfield": dict(min_area=10, close_ksize=3, min_area_frac=0.30),
 }
 
+CANON_DIAM = 22.0
+
 
 def _pad_to_multiple(x: np.ndarray, multiple: int = 16):
     h, w = x.shape[:2]
@@ -84,15 +86,41 @@ def instances_from_probs(
     return remap[seed_labels]
 
 
-def segment_image(image: np.ndarray, model, *, device=None, preprocess: bool = True, modality=None, tta: bool = False):
-    if preprocess:
-        if modality is None:
-            modality = detect_modality(image)
-        canonical = normalize_image(image, output="zscore", modality=modality)
-    else:
-        canonical = image
+def _median_diameter(labels: np.ndarray) -> float:
+    areas = np.bincount(labels.ravel())[1:]
+    areas = areas[areas > 0]
+    if areas.size == 0:
+        return 0.0
+    return float(np.median(2.0 * np.sqrt(areas / np.pi)))
+
+
+def _canonical_scale(labels: np.ndarray, target_diam: float, lo: float = 0.4, hi: float = 2.5) -> float:
+    median = _median_diameter(labels)
+    if median <= 0:
+        return 1.0
+    return float(np.clip(target_diam / median, lo, hi))
+
+
+def segment_image(image: np.ndarray, model, *, device=None, preprocess: bool = True, modality=None,
+                  tta: bool = False, canonical_diam: float = CANON_DIAM):
+    if preprocess and modality is None:
+        modality = detect_modality(image)
     predict = predict_maps_tta if tta else predict_maps
-    probs = predict(model, canonical, device=device)
-    labels = instances_from_probs(probs, **_DECODE_PARAMS.get(modality, {}))
-    count = int(labels.max())
-    return labels, count
+    params = _DECODE_PARAMS.get(modality, {})
+
+    def run(arr):
+        canonical = normalize_image(arr, output="zscore", modality=modality) if preprocess else arr
+        return instances_from_probs(predict(model, canonical, device=device), **params)
+
+    labels = run(image)
+    if canonical_diam:
+        scale = _canonical_scale(labels, canonical_diam)
+        if abs(scale - 1.0) > 0.02:
+            h, w = image.shape[:2]
+            scaled = cv2.resize(image, (max(8, round(w * scale)), max(8, round(h * scale))),
+                                interpolation=cv2.INTER_LINEAR)
+            labels_s = run(scaled)
+            resized = labels_s if labels_s.shape == (h, w) else \
+                cv2.resize(labels_s.astype(np.int32), (w, h), interpolation=cv2.INTER_NEAREST)
+            return resized, int(labels_s.max())
+    return labels, int(labels.max())

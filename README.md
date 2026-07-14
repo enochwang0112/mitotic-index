@@ -9,7 +9,7 @@ Two decoupled stages: a **segmenter** counts every nucleus (denominator) and a p
 ## Quickstart
 
 ```bash
-pip install torch torchvision opencv-python numpy
+pip install -r requirements.txt
 
 gh release download v1.0 -D models/                              # get the trained weights
 PYTHONPATH=src python example_inference.py image.png --overlay out.png
@@ -28,7 +28,7 @@ See **[MODEL_CARD.md](MODEL_CARD.md)** for architectures, metrics, and licensing
 Training and inference auto-select the device: **Apple Silicon (MPS)**, **NVIDIA (CUDA)**, or CPU —
 no flags needed. Just install the matching PyTorch build:
 
-- **Apple Silicon / CPU:** `pip install torch torchvision` (the default wheel is MPS-capable).
+- **Apple Silicon / CPU:** `pip install -r requirements.txt` (the default wheel is MPS-capable).
 - **NVIDIA GPU:** install the CUDA build, e.g.
   `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121`.
 

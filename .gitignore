@@ -217,24 +217,18 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Datasets
+# Datasets (ignore contents, keep the segmentation/ vs classification/ layout)
 data/raw/*
 !data/raw/.gitkeep
+!data/raw/segmentation/
+data/raw/segmentation/*
+!data/raw/segmentation/.gitkeep
+!data/raw/classification/
+data/raw/classification/*
+!data/raw/classification/.gitkeep
 
 data/processed/*
 !data/processed/.gitkeep
-
-data/boxes/train/interphase/*
-!data/boxes/train/interphase/.gitkeep
-
-data/boxes/train/mitotic/*
-!data/boxes/train/mitotic/.gitkeep
-
-data/boxes/validate/interphase/*
-!data/boxes/validate/interphase/.gitkeep
-
-data/boxes/validate/mitotic/*
-!data/boxes/validate/mitotic/.gitkeep
 
 # Model checkpoints
 models/

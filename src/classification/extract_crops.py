@@ -113,8 +113,8 @@ def extract(root: Path, out: Path, crop_size: int = 128, limit: int = 0, tumor_t
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Download MIDOG++ tiffs from figshare, extract mitosis/imposter crops")
-    p.add_argument("--root", type=Path, default=Path("data/raw/midogpp"))
-    p.add_argument("--out", type=Path, default=Path("data/raw/midogpp/crops"))
+    p.add_argument("--root", type=Path, default=Path("data/raw/classification/midogpp"))
+    p.add_argument("--out", type=Path, default=Path("data/raw/classification/midogpp/crops"))
     p.add_argument("--crop-size", type=int, default=128)
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--tumor-type", default="")

@@ -83,7 +83,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--src", type=Path, required=True, help="stage1_test root (<id>/images/<id>.png)")
     p.add_argument("--csv", type=Path, required=True, help="stage1_solution.csv with RLE ground truth")
-    p.add_argument("--out", type=Path, default=Path("data/raw/stage1_test_labeled"))
+    p.add_argument("--out", type=Path, default=Path("data/raw/segmentation/stage1_test_labeled"))
     p.add_argument("--limit", type=int, default=0)
     args = p.parse_args(argv)
 

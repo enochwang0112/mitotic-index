@@ -42,8 +42,10 @@ def run_epoch(model, loader, loss_fn, device, optimizer=None, *, desc="", log_ev
         fn += int(((pred == 0) & (y == 1)).sum())
         tn += int(((pred == 0) & (y == 0)).sum())
         if desc and (i % log_every == 0 or i == nb):
-            rate = n / max(time.time() - t0, 1e-6)
-            print(f"\r  {desc} {i:>4}/{nb}  loss {total / max(n, 1):.4f}  {rate:4.0f} img/s   ",
+            elapsed = time.time() - t0
+            rate = n / max(elapsed, 1e-6)
+            eta = (nb - i) * elapsed / max(i, 1)
+            print(f"\r  {desc} {i:>4}/{nb}  loss {total / max(n, 1):.4f}  {rate:4.0f} img/s  eta {eta:4.0f}s    ",
                   end="", flush=True)
     prec = tp / max(tp + fp, 1)
     rec = tp / max(tp + fn, 1)
@@ -53,7 +55,7 @@ def run_epoch(model, loader, loss_fn, device, optimizer=None, *, desc="", log_ev
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Train the mitosis crop classifier on MIDOG++")
-    p.add_argument("--crops", type=Path, default=Path("data/raw/midogpp/crops"))
+    p.add_argument("--crops", type=Path, default=Path("data/raw/classification/midogpp/crops"))
     p.add_argument("--out", type=Path, default=Path("models/mitosis.pt"))
     p.add_argument("--epochs", type=int, default=20)
     p.add_argument("--batch-size", type=int, default=64)

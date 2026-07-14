@@ -68,7 +68,7 @@ def run_epoch(model, loader, loss_fn, device, optimizer=None, *, desc="", log_ev
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Train the U-Net nuclei segmenter on DSB2018")
-    p.add_argument("--data", type=Path, nargs="+", default=[Path("data/raw/stage1_train")],
+    p.add_argument("--data", type=Path, nargs="+", default=[Path("data/raw/segmentation/stage1_train")],
                    help="One or more sample roots (DSB2018 layout); extra H&E roots are merged in")
     p.add_argument("--out", type=Path, default=Path("models/segmenter.pt"))
     p.add_argument("--epochs", type=int, default=30)

@@ -171,11 +171,11 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--source", choices=["monuseg", "pannuke", "lizard"], required=True)
     p.add_argument("--src", type=Path, required=True, help="Downloaded dataset directory")
-    p.add_argument("--out", type=Path, default=None, help="Output root (default data/raw/<source>)")
+    p.add_argument("--out", type=Path, default=None, help="Output root (default data/raw/segmentation/<source>)")
     p.add_argument("--limit", type=int, default=0, help="Cap samples (0 = all); for a quick trial")
     args = p.parse_args(argv)
 
-    out = args.out or Path("data/raw") / args.source
+    out = args.out or Path("data/raw/segmentation") / args.source
     out.mkdir(parents=True, exist_ok=True)
     convert = {"monuseg": convert_monuseg, "pannuke": convert_pannuke, "lizard": convert_lizard}[args.source]
     n = convert(args.src, out, limit=args.limit)
